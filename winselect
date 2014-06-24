@@ -1,0 +1,76 @@
+#!/bin/sh
+
+##
+## Display list of windows managed by the window manager (using dmenu) and switch to the selected window.
+##
+## When launched with '-c' option, display only windows on current desktop.
+##
+## Author: Martin Kourim <misc.kourim@gmail.com>
+## License: Public Domain
+
+
+curdonly=0
+
+case "$1" in
+  '-c'|'c') curdonly=1 ; shift ;;
+  '-help'|'--help'|'help') echo "usage: ${0##*/} [-c] [--help] DMENU_OPTIONS" >&2; exit 0 ;;
+esac
+
+type wmctrl >/dev/null 2>&1 || { echo "wmctrl command missing"; exit 1; }
+type dmenu  >/dev/null 2>&1 || { echo "dmenu command missing"; exit 1; }
+
+
+# print current desktop id
+cur_desktop() {
+  wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && echo "$num"; done
+}
+
+
+# use wmctrl to display list of running clients and their window titles
+# prefixed with desktop number
+winlist() {
+  {
+    # names of running clients that are exclusive and
+    # therefore can be used for windows switching
+    wmctrl -l -x | while read id num class dis; do echo "$class"; done | \
+    sort | uniq -c | while read count class; do
+      [ "$count" = 1 ] && echo "$num ${class#*.}"
+    done
+
+    # titles of all windows
+    wmctrl -l -x | while read id num class mach title ; do
+      if [ "${#title}" -le 40 ]; then
+        echo "$num $title"
+      else
+        echo -n "$num "; echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p'
+      fi
+    done | sort -u
+  } | tr '[:upper:]' '[:lower:]'
+}
+
+
+# list all windows OR windows on current desktop
+winlist_filter() {
+  if [ "$curdonly" = 1 ]; then
+    desktop="$(cur_desktop)"
+    # print only windows on current desktop & sticky windows
+    winlist | while read num title; do [ "$num" = "$desktop" -o "$num" = '-1' ] && echo "$title"; done
+  else
+    winlist | while read num title; do echo "$title"; done
+  fi
+}
+
+
+# match window title returned by dmenu with actual window and switch to it
+winlist_match() {
+  title="$(echo "$@" | sed 's/\.\.\./\.\*/')"
+  echo "$title"
+  wmctrl -l -x | egrep -i "$title" | while read id num class mach title; do
+    wmctrl -a "$title" || wmctrl -x -a "$title"
+    break
+done
+}
+
+
+window="$(winlist_filter | dmenu "$@")"
+[ -n "$window" ] && winlist_match "$window"
