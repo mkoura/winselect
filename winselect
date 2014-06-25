@@ -42,7 +42,8 @@ winlist() {
       if [ "${#title}" -le 40 ]; then
         echo "$num $title"
       else
-        echo -n "$num "; echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p'
+        echo -n "$num "
+        echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p'
       fi
     done | sort -u
   } | tr '[:upper:]' '[:lower:]'
@@ -54,7 +55,9 @@ winlist_filter() {
   if [ "$curdonly" = 1 ]; then
     desktop="$(cur_desktop)"
     # print only windows on current desktop & sticky windows
-    winlist | while read num title; do [ "$num" = "$desktop" -o "$num" = '-1' ] && echo "$title"; done
+    winlist | while read num title; do
+      [ "$num" = "$desktop" -o "$num" = '-1' ] && echo "$title"
+    done
   else
     winlist | while read num title; do echo "$title"; done
   fi
@@ -74,3 +77,6 @@ done
 
 window="$(winlist_filter | dmenu "$@")"
 [ -n "$window" ] && winlist_match "$window"
+
+
+# vim: set noai et sr ts=2 sw=2 sts=2:
