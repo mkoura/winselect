@@ -63,20 +63,19 @@ winlist_filter() {
 
 # match window title returned by dmenu with actual window and switch to it
 winlist_match() {
-  title="$(echo "$@" | sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
-  #echo "$title"
+  title="$(sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
+  [ -z "$title" ] && return 0
   wmctrl -l -x | egrep -i "$title" | while read id num class mach title; do
-    # match only windows on current desktop when specified
+    # match only windows on current desktop or sticky windows when "-c" was specified
     [ "$curdonly" = 1 ] && [ "$num" != "$cur_desktop" -a "$num" != '-1' ] && continue
-    #echo "$id $title"
+    # switch to selected window
     wmctrl -i -a "$id"
     break
 done
 }
 
 
-window="$(winlist_filter | dmenu "$@")"
-[ -n "$window" ] && winlist_match "$window"
+winlist_filter | dmenu "$@" | winlist_match
 
 
 # vim: set noai et sr ts=2 sw=2 sts=2:
