@@ -63,11 +63,12 @@ winlist_filter() {
 
 # match window title returned by dmenu with actual window and switch to it
 winlist_match() {
-  title="$(echo "$@" | sed 's/\.\.\./\.\*/')"
-  echo "$title"
+  title="$(echo "$@" | sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
+  #echo "$title"
   wmctrl -l -x | egrep -i "$title" | while read id num class mach title; do
     # match only windows on current desktop when specified
     [ "$curdonly" = 1 ] && [ "$num" != "$cur_desktop" -a "$num" != '-1' ] && continue
+    #echo "$id $title"
     wmctrl -i -a "$id"
     break
 done
