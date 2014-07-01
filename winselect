@@ -20,10 +20,8 @@ type wmctrl >/dev/null 2>&1 || { echo "wmctrl command missing"; exit 1; }
 type dmenu  >/dev/null 2>&1 || { echo "dmenu command missing"; exit 1; }
 
 
-# print current desktop id
-cur_desktop() {
-  wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && echo "$num"; done
-}
+# current desktop id
+cur_desktop="$(wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && { echo "$num"; break; }; done)"
 
 
 # use wmctrl to display list of running clients and their window titles
@@ -53,10 +51,9 @@ winlist() {
 # list all windows OR windows on current desktop
 winlist_filter() {
   if [ "$curdonly" = 1 ]; then
-    desktop="$(cur_desktop)"
     # print only windows on current desktop & sticky windows
     winlist | while read num title; do
-      [ "$num" = "$desktop" -o "$num" = '-1' ] && echo "$title"
+      [ "$num" = "$cur_desktop" -o "$num" = '-1' ] && echo "$title"
     done
   else
     winlist | while read num title; do echo "$title"; done
@@ -69,7 +66,9 @@ winlist_match() {
   title="$(echo "$@" | sed 's/\.\.\./\.\*/')"
   echo "$title"
   wmctrl -l -x | egrep -i "$title" | while read id num class mach title; do
-    wmctrl -a "$title" || wmctrl -x -a "$title"
+    # match only windows on current desktop when specified
+    [ "$curdonly" = 1 ] && [ "$num" != "$cur_desktop" -a "$num" != '-1' ] && continue
+    wmctrl -i -a "$id"
     break
 done
 }
