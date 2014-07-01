@@ -24,40 +24,38 @@ type dmenu  >/dev/null 2>&1 || { echo "dmenu command missing"; exit 1; }
 cur_desktop="$(wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && { echo "$num"; break; }; done)"
 
 
+# print window title or class
+print_win() {
+  if [ "$curdonly" = 1 ]; then
+    # print only windows on current desktop or sticky windows when "-c" was specified
+    [ "$1" = "$cur_desktop" -o "$1" = '-1' ] && echo "$2"
+  else
+    echo "$2"
+  fi
+}
+
+
 # use wmctrl to display list of running clients and their window titles
 # prefixed with desktop number
 winlist() {
   {
     # names of running clients that are exclusive and
     # therefore can be used for windows switching
-    wmctrl -l -x | while read id num class dis; do echo "$class"; done | \
+    wmctrl -l -x | while read id num class dis; do print_win "$num" "$class"; done | \
     sort | uniq -c | while read count class; do
-      [ "$count" = 1 ] && echo "$num ${class#*.}"
+      [ "$count" = 1 ] && echo "${class#*.}"
     done
 
     # titles of all windows
-    wmctrl -l -x | while read id num class mach title ; do
+    wmctrl -l -x | while read id num class mach title; do
       if [ "${#title}" -le 40 ]; then
-        echo "$num $title"
+        print_win "$num" "$title"
       else
-        echo -n "$num "
-        echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p'
+        tit="$(echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p')"
+        print_win "$num" "$tit"
       fi
     done | sort -u
   } | tr '[:upper:]' '[:lower:]'
-}
-
-
-# list all windows OR windows on current desktop
-winlist_filter() {
-  if [ "$curdonly" = 1 ]; then
-    # print only windows on current desktop & sticky windows
-    winlist | while read num title; do
-      [ "$num" = "$cur_desktop" -o "$num" = '-1' ] && echo "$title"
-    done
-  else
-    winlist | while read num title; do echo "$title"; done
-  fi
 }
 
 
@@ -75,7 +73,7 @@ done
 }
 
 
-winlist_filter | dmenu "$@" | winlist_match
+winlist | dmenu "$@" | winlist_match
 
 
 # vim: set noai et sr ts=2 sw=2 sts=2:
