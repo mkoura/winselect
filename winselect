@@ -26,12 +26,18 @@ cur_desktop="$(wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && { ec
 
 # print window title or class
 print_win() {
+  rv=1
   if [ "$curdonly" = 1 ]; then
     # print only windows on current desktop or sticky windows when "-c" was specified
-    [ "$1" = "$cur_desktop" -o "$1" = '-1' ] && echo "$2"
+    if [ "$1" = "$cur_desktop" -o "$1" = '-1' ]; then
+      echo "${3}: $2"
+      rv=0
+    fi
   else
-    echo "$2"
+    echo "${3}: $2"
+    rv=0
   fi
+  return "$rv"
 }
 
 
@@ -39,33 +45,38 @@ print_win() {
 # prefixed with desktop number
 winlist() {
   {
-    # names of running clients that are exclusive and
-    # therefore can be used for windows switching
-    wmctrl -l -x | while read id num class dis; do print_win "$num" "$class"; done | \
-    sort | uniq -c | while read count class; do
-      [ "$count" = 1 ] && echo "${class#*.}"
-    done
-
     # titles of all windows
+    i=1
     wmctrl -l -x | while read id num class mach title; do
       if [ "${#title}" -le 40 ]; then
-        print_win "$num" "$title"
+        tit="$title"
       else
+        # if the window title is too long, replace the middle of the string with ...
         tit="$(echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p')"
-        print_win "$num" "$tit"
       fi
-    done | sort -u
+      print_win "$num" "$tit" "$i" && i="$(($i + 1))"
+    done
   } | tr '[:upper:]' '[:lower:]'
 }
 
 
 # match window title returned by dmenu with actual window and switch to it
 winlist_match() {
-  title="$(sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
-  [ -z "$title" ] && return 0
-  wmctrl -l -x | egrep -i "$title" | while read id num class mach title; do
+  # create valid regular expression for window title matching
+  str="$(sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
+  # window title
+  tit="${str#*: }"
+  # prefix number
+  pref="${str%%: *}"
+  [ -z "$tit" ] && return 0
+  i=1
+  wmctrl -l -x | while read id num class mach title; do
     # match only windows on current desktop or sticky windows when "-c" was specified
     [ "$curdonly" = 1 ] && [ "$num" != "$cur_desktop" -a "$num" != '-1' ] && continue
+    # match window only if counter is >= prefix number
+    [ "$i" -ge "$pref" ] || { i="$(($i + 1))"; continue; }
+    # does the title match?
+    echo "$title" | egrep -q -i "$tit" || continue
     # switch to selected window
     wmctrl -i -a "$id"
     break
