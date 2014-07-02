@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 ##
 ## Display list of windows managed by the window manager (using dmenu) and switch to the selected window.
@@ -23,20 +23,26 @@ type dmenu  >/dev/null 2>&1 || { echo "dmenu command missing"; exit 1; }
 # current desktop id
 cur_desktop="$(wmctrl -d | while read num curr dis; do [ "$curr" = "*" ] && { echo "$num"; break; }; done)"
 
+# array of window ids
+winid=()
 
-# print window title or class
-print_win() {
-  rv=1
+# array of window titles
+wintit=()
+
+
+# populate arrays
+save_win() {
+  rv=0
+  # print only windows on current desktop or sticky windows when "-c" was specified
   if [ "$curdonly" = 1 ]; then
-    # print only windows on current desktop or sticky windows when "-c" was specified
-    if [ "$1" = "$cur_desktop" -o "$1" = '-1' ]; then
-      echo "${3}: $2"
-      rv=0
-    fi
-  else
-    echo "${3}: $2"
-    rv=0
+    [ "$2" = "$cur_desktop" -o "$2" = '-1' ] || rv=1
   fi
+
+  if [ "$rv" = 0 ]; then
+    wintit[${1}]="${1}:[${3}]"
+    winid[${1}]="$4"
+  fi
+
   return "$rv"
 }
 
@@ -44,47 +50,40 @@ print_win() {
 # use wmctrl to display list of running clients and their window titles
 # prefixed with desktop number
 winlist() {
-  {
-    # titles of all windows
-    i=1
-    wmctrl -l -x | while read id num class mach title; do
-      if [ "${#title}" -le 40 ]; then
-        tit="$title"
-      else
-        # if the window title is too long, replace the middle of the string with ...
-        tit="$(echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p')"
-      fi
-      print_win "$num" "$tit" "$i" && i="$(($i + 1))"
-    done
-  } | tr '[:upper:]' '[:lower:]'
+  # titles of all windows
+  i=1
+  while read id num class mach title; do
+    if [ "${#title}" -le 40 ]; then
+      tit="$title"
+    else
+      # if the window title is too long, replace the middle of the string with ...
+      tit="$(echo "$title" | sed -n 's/^\(.\{14,17\}\).*\(.\{14,20\}\)$/\1...\2/p')"
+    fi
+    save_win "$i" "$num" "$tit" "$id" && ((i++))
+  done < <(wmctrl -l -x) # avoid subshell
 }
 
 
 # match window title returned by dmenu with actual window and switch to it
 winlist_match() {
-  # create valid regular expression for window title matching
-  str="$(sed 's/\.\.\./\.\*/;s/\[/\\[/g;s/\([]{}()+?$|^]\)/\\\1/g')"
-  # window title
-  tit="${str#*: }"
-  # prefix number
-  pref="${str%%: *}"
-  [ -z "$tit" ] && return 0
-  i=1
-  wmctrl -l -x | while read id num class mach title; do
-    # match only windows on current desktop or sticky windows when "-c" was specified
-    [ "$curdonly" = 1 ] && [ "$num" != "$cur_desktop" -a "$num" != '-1' ] && continue
-    # match window only if counter is >= prefix number
-    [ "$i" -ge "$pref" ] || { i="$(($i + 1))"; continue; }
-    # does the title match?
-    echo "$title" | egrep -q -i "$tit" || continue
-    # switch to selected window
-    wmctrl -i -a "$id"
-    break
-done
+  # prefix number (from e.g. "2:[window title]")
+  pref="${@%%:[*}"
+  [ -z "$pref" ] && return 0
+  wmctrl -i -a "${winid[$pref]}"
 }
 
 
-winlist | dmenu "$@" | winlist_match
+winlist
+
+title="$(
+  i=1
+  while [ "$i" -le "${#wintit[@]}" ]; do
+    echo "${wintit[$i]}"
+    ((i++))
+  done | tr '[:upper:]' '[:lower:]' | dmenu "$@"
+)"
+
+winlist_match "$title"
 
 
 # vim: set noai et sr ts=2 sw=2 sts=2:
