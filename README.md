@@ -1,4 +1,4 @@
-winselect
+Moved to https://gitlab.com/mkourim/winselect
 =========
 
 Displays list of windows managed by the window manager using dmenu and switch to selected window.
